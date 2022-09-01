@@ -1,0 +1,8 @@
+* Notes on Errata Levels
+
+Actually the errata level definition passed on to the Dockerfile only exists in order to be able to
+trigger rebuilds. Hence, it is not sctrictly necessary to have an actually existing errata level in
+there, but it makes tracking state much easier.
+
+To check latest errata levels, go to https://errata.software-univention.de/ and choose your UCS
+version.
