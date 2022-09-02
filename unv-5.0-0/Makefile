@@ -1,4 +1,5 @@
 UCS_BASE := 4.4-9
+UCS_BASE_ERRATA := 1278
 UCS_TARGET := 5.0-0
 ERRATA_LEVEL := 195
 
@@ -10,6 +11,7 @@ TARGET_TAG := $(IMAGE_NAME):$(ERRATA_LEVEL)
 image: Dockerfile
 	docker build \
 		--build-arg UCS_BASE=$(UCS_BASE) \
+		--build-arg UCS_BASE_ERRATA=$(UCS_BASE_ERRATA) \
 		--build-arg UCS_TARGET=$(UCS_TARGET) \
 		--build-arg ERRATA_LEVEL=$(ERRATA_LEVEL) \
 		--tag "$(TARGET_TAG)" .
