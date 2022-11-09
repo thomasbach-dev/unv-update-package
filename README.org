@@ -35,4 +35,4 @@ run:
 Note that the paths passed to ~--volume~ have to be absolute ones. This will build the package, put
 the ~.deb~ file in ~/path/to/my-package~ and print a line on stdout starting with ~PKG_FILE=~. You
 can use that marker to build further scripts to upload the package and install it on a remote
-system.
+system. One example how this can be done is the [[./update_package.py][update_package.py]] script.
