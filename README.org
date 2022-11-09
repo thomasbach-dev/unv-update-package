@@ -1,4 +1,14 @@
-* Notes on Errata Levels
+* Docker Images for UCS (Univention Corporate Server)
+
+Nothing spectecular here. I mainly use these Docker images to build packages. Especially, I do *not*
+use these images to run LDAP, Univention Directory Manager, etc. in a local Docker instance.
+
+** Building Images
+
+… is as easy as entering a directory and run ~make~. Note that higher versioned images build on
+lower level ones. So to build ~unv-4.4-5~ you have to build ~unv-4.4-4~ first.
+
+*** Notes on Errata Levels
 
 Actually the errata level definition passed on to the Dockerfile only exists in order to be able to
 trigger rebuilds. Hence, it is not sctrictly necessary to have an actually existing errata level in
@@ -6,3 +16,26 @@ there, but it makes tracking state much easier.
 
 To check latest errata levels, go to https://errata.software-univention.de/ and choose your UCS
 version.
+
+** Building Packages
+
+Prepare your image in such a way that packaging is as fast as possible, especially install all
+necessary packages upfront. You can find an example in [[./unv-bsb-5.0-2/][unv-bsb-5.0-2]]. There you can also find a an
+example build script [[./unv-bsb-5.0-2/build.sh][build.sh]].
+
+Now, in order to build a package you have to map in the directory where your ~debian~ folder
+resides to ~/source~ in the Docker container. For example, if your package is in
+~/path/to/my-package~ with the Debian build instructions in ~/path/to/my-package/debian~ you would
+run:
+#+begin_src shell
+  docker \
+      run \
+      --rm \
+      -it \
+      --volume=/path/to/my-package:/source \
+      unv-bsb-5.0-2
+#+end_src
+Note that the paths passed to ~--volume~ have to be absolute ones. This will build the package, put
+the ~.deb~ file in ~/path/to/my-package~ and print a line on stdout starting with ~PKG_FILE=~. You
+can use that marker to build further scripts to upload the package and install it on a remote
+system.
