@@ -28,10 +28,7 @@ resides to ~/source~ in the Docker container. For example, if your package is in
 ~/path/to/my-package~ with the Debian build instructions in ~/path/to/my-package/debian~ you would
 run:
 #+begin_src shell
-  docker \
-      run \
-      --rm \
-      -it \
+  docker run --rm -it \
       --volume=/path/to/my-package:/source \
       unv-bsb-5.0-2
 #+end_src
