@@ -8,9 +8,12 @@ TARGET_TAG := $(IMAGE_NAME):$(ERRATA_LEVEL)
 
 .PHONY: image
 
-image: Dockerfile
+image: build.sh Dockerfile
 	docker build \
 		--build-arg UCS_BASE=$(UCS_BASE) \
 		--build-arg UCS_BASE_ERRATA=$(UCS_BASE_ERRATA) \
 		--tag "$(TARGET_TAG)" .
 	docker tag "$(TARGET_TAG)" "$(IMAGE_NAME):latest"
+
+build.sh:
+	ln -f ../build.sh

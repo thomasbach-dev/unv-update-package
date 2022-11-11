@@ -21,7 +21,7 @@ version.
 
 Prepare your image in such a way that packaging is as fast as possible, especially install all
 necessary packages upfront. You can find an example in [[./unv-bsb-5.0-2/][unv-bsb-5.0-2]]. There you can also find a an
-example build script [[./unv-bsb-5.0-2/build.sh][build.sh]].
+example build script [[./build.sh][build.sh]].
 
 Now, in order to build a package you have to map in the directory where your ~debian~ folder
 resides to ~/source~ in the Docker container. For example, if your package is in
