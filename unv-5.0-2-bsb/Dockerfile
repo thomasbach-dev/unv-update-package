@@ -8,6 +8,7 @@ RUN env LANG=C apt-get update \
       debhelper \
       dh-virtualenv \
       dpkg-dev \
+      python3-all \
       python3-dev \
       python3-pip \
       python3-venv \
