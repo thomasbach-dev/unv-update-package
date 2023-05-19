@@ -195,21 +195,21 @@ def main(args: argparse.Namespace):
     update_packages(cfg, pkg_files)
 
 
-def build_packages_and_get_paths(cfg: Configuration) -> typing.Iterable[pathlib.Path]:
+def build_packages_and_get_paths(cfg: Configuration) -> typing.List[pathlib.Path]:
+    result = []
     for directory in cfg.folders:
         dir_abs = cfg.repository_root / directory
         if cfg.skip_build:
             for pkg_file in dir_abs.glob("*.deb"):
-                yield pkg_file
+                result.append(pkg_file)
         else:
             proc = build_packages(cfg, directory)
             for pkg_file in get_package_from_stdout(proc):
-                yield dir_abs / pkg_file
+                result.append(dir_abs / pkg_file)
+    return result
 
 
-def build_packages(
-    cfg: Configuration, directory: pathlib.Path
-) -> subprocess.CompletedProcess:
+def build_packages(cfg: Configuration, directory: str) -> subprocess.CompletedProcess:
     logger.info(f"Building packages in {directory}")
     cmd = [
         "docker",
@@ -221,6 +221,7 @@ def build_packages(
         f"--volume={cfg.repository_root / directory}:/source",
         cfg.docker_image,
     ]
+    proc = None
     try:
         proc = subprocess.run(
             cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
@@ -240,30 +241,37 @@ def get_package_from_stdout(proc: subprocess.CompletedProcess) -> typing.Iterabl
             yield pkg_file
 
 
-def update_packages(
-    cfg: Configuration, packages: typing.Iterable[pathlib.Path]
-) -> None:
+def update_packages(cfg: Configuration, packages: typing.List[pathlib.Path]) -> None:
     for machine in cfg.machines:
         logger.info(f"Updating packages on {machine}")
+        to_install = []
         for pkg in packages:
             name = pkg.name.split("_", 1)[0]
             logger.info(f"Checking if {name} has to be installed:")
             if cfg.skip_check or is_package_installed(machine, name):
                 logger.info(f"Package is installed. Updating!")
-                copy_and_install_package(machine, pkg)
+                copy_package(machine, pkg)
+                to_install.append(pkg.name)
             else:
                 logger.info("Skipped!")
+        install_packages(machine, to_install)
 
 
-def copy_and_install_package(machine: str, pkg_path: pathlib.Path) -> None:
+def copy_package(machine: str, pkg_path: pathlib.Path) -> None:
     logger.debug("Copying over the package")
     subprocess.run(
         ["scp", str(pkg_path), f"root@{machine}:{pkg_path.name}"], check=True
     )
+
+
+def install_packages(machine: str, pkg_paths: typing.List[str]) -> None:
+    if pkg_paths == []:
+        logger.info("No packages to install!")
+        return
+
     logger.debug("Running dpkg-install")
-    subprocess.run(
-        ["ssh", f"root@{machine}", f"dpkg --install {pkg_path.name}"], check=True
-    )
+    pkgs = " ".join(pkg_path for pkg_path in pkg_paths)
+    subprocess.run(["ssh", f"root@{machine}", f"dpkg --install {pkgs}"], check=True)
 
 
 def is_package_installed(machine: str, package: str) -> bool:
