@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import dataclasses
 import logging
 import os
 import pathlib
@@ -55,6 +56,16 @@ PARSER.add_argument(
             "The set of machines to update the packages on.",
             "This has to be a comma separated list.",
             'You can also set this argument via the "UP_MACHINES" environment variable.',
+        ]
+    ),
+)
+PARSER.add_argument(
+    "--ssh-config",
+    default=os.environ.get("UP_SSH_CONFIG"),
+    help=" ".join(
+        [
+            "A ssh configuration file to pass on to ssh via the '-F' option.",
+            'You can also set this argument via the "UP_SSH_CONFIG" environment variable.',
         ]
     ),
 )
@@ -141,6 +152,7 @@ class Configuration(typing.NamedTuple):
     # convenience.
     branch_name: str
     machines: typing.List[str]
+    ssh_config: str
     docker_image: str
     folders: typing.List[str]
     skip_build: bool
@@ -173,6 +185,7 @@ class Configuration(typing.NamedTuple):
             repository_root=repo_root,
             branch_name=branch_name,
             machines=machines,
+            ssh_config=args.ssh_config,
             docker_image=args.docker_image,
             folders=args.folders,
             skip_build=args.skip_package_build,
@@ -209,6 +222,34 @@ def build_packages_and_get_paths(cfg: Configuration) -> typing.List[pathlib.Path
     return result
 
 
+_BUILD_SCRIPT = """
+#!/bin/bash
+set -ex
+#
+#export LC_ALL="en_US.UTF-8"
+##ucslint 1>&2
+#
+tmpdir="$(mktemp -d)"
+
+pkg_dir="$(pwd)"
+orig_uid=$(stat -c %u "${pkg_dir}")
+orig_gid=$(stat -c %g "${pkg_dir}")
+echo "Copying package files to ${tmpdir}"
+cp -av "${pkg_dir}"/* "${tmpdir}"
+
+cd "${tmpdir}"
+
+dpkg-buildpackage --build=binary
+
+for pkg_file in "${tmpdir}"/../*.deb; do
+    cp "${pkg_file}" "${pkg_dir}"
+    pkg=$(basename "${pkg_file}")
+    chown ${orig_uid}:${orig_gid} "${pkg_dir}/${pkg}"
+    echo "PKG_FILE=${pkg}"
+done
+"""
+
+
 def build_packages(cfg: Configuration, directory: str) -> subprocess.CompletedProcess:
     logger.info(f"Building packages in {directory}")
     cmd = [
@@ -219,9 +260,14 @@ def build_packages(cfg: Configuration, directory: str) -> subprocess.CompletedPr
         # Eventually we need sys_admin to do fancy things in the Docker container, like chrooting
         #'--cap-add=sys_admin',
         f"--volume={cfg.repository_root / directory}:/source",
+        "--workdir=/source",
         cfg.docker_image,
+        f"/bin/bash",
+        "-c",
+        _BUILD_SCRIPT,
     ]
     proc = None
+    logger.debug(f"Command is:\n%s", " ".join(cmd))
     try:
         proc = subprocess.run(
             cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
@@ -242,41 +288,67 @@ def get_package_from_stdout(proc: subprocess.CompletedProcess) -> typing.Iterabl
 
 
 def update_packages(cfg: Configuration, packages: typing.List[pathlib.Path]) -> None:
+    ssh_ops = SSHOperations(cfg.ssh_config)
     for machine in cfg.machines:
         logger.info(f"Updating packages on {machine}")
         to_install = []
         for pkg in packages:
             name = pkg.name.split("_", 1)[0]
             logger.info(f"Checking if {name} has to be installed:")
-            if cfg.skip_check or is_package_installed(machine, name):
+            if cfg.skip_check or is_package_installed(ssh_ops, machine, name):
                 logger.info(f"Package is installed. Updating!")
-                copy_package(machine, pkg)
+                copy_package(ssh_ops, machine, pkg)
                 to_install.append(pkg.name)
             else:
                 logger.info("Skipped!")
-        install_packages(machine, to_install)
+        install_packages(ssh_ops, machine, to_install)
 
 
-def copy_package(machine: str, pkg_path: pathlib.Path) -> None:
+@dataclasses.dataclass(frozen=True)
+class SSHOperations:
+    ssh_config: typing.Optional[str]
+
+    def scp(self, src: str, dest: str) -> subprocess.CompletedProcess:
+        cmd = self._add_ssh_config_if_needed(["scp"])
+        cmd.extend([src, dest])
+        logger.debug("Running %r", cmd)
+        return subprocess.run(cmd, check=True)
+
+    def ssh(
+        self, machine: str, remote_cmd: str, *args, **kwargs
+    ) -> subprocess.CompletedProcess:
+        cmd = self._add_ssh_config_if_needed(["ssh"])
+        cmd.extend([machine, remote_cmd])
+        logger.debug("Running %r", cmd)
+        return subprocess.run(cmd, *args, **kwargs)
+
+    def _add_ssh_config_if_needed(self, cmd):
+        if self.ssh_config is not None:
+            cmd.extend(["-F", self.ssh_config])
+        return cmd
+
+
+def copy_package(ssh_ops: SSHOperations, machine: str, pkg_path: pathlib.Path) -> None:
     logger.debug("Copying over the package")
-    subprocess.run(
-        ["scp", str(pkg_path), f"root@{machine}:{pkg_path.name}"], check=True
-    )
+    ssh_ops.scp(str(pkg_path), f"{machine}:{pkg_path.name}")
 
 
-def install_packages(machine: str, pkg_paths: typing.List[str]) -> None:
+def install_packages(
+    ssh_ops: SSHOperations, machine: str, pkg_paths: typing.List[str]
+) -> None:
     if pkg_paths == []:
         logger.info("No packages to install!")
         return
 
     logger.debug("Running dpkg-install")
     pkgs = " ".join(pkg_path for pkg_path in pkg_paths)
-    subprocess.run(["ssh", f"root@{machine}", f"dpkg --install {pkgs}"], check=True)
+    ssh_ops.ssh(machine, f"dpkg --install {pkgs}", check=True)
 
 
-def is_package_installed(machine: str, package: str) -> bool:
-    result = subprocess.run(
-        ["ssh", f"root@{machine}", f"dpkg-query --status {package}"],
+def is_package_installed(ssh_ops: SSHOperations, machine: str, package: str) -> bool:
+    result = ssh_ops.ssh(
+        machine,
+        f"dpkg-query --status {package}",
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
