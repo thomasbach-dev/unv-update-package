@@ -1,38 +1,44 @@
-* Docker Images for UCS (Univention Corporate Server)
+* Build, distribute and install packages on Debian
 
-Nothing spectecular here. I mainly use these Docker images to build packages. Especially, I do *not*
-use these images to run LDAP, Univention Directory Manager, etc. in a local Docker instance.
+A small script I use when working with [[https://www.univention.de/][Univention]] Corporate Server (UCS). UCS is a Debian based
+operating system. Developing and testing software usually involves working on a VM where UCS is
+deployed. Anyways, editing files remotely then copying them back to my local machine in order to
+check them into version control was a nasty workflow. So I decided to go the other way around: edit
+locally and distribute the files to the VMs.
 
-** Building Images
+The script is easy to use and can be configured using environment variables via [[https://direnv.net/][direnv]]. You have to
+provide Docker image, a directory where packages should be build and a target machine:
+#+begin_example
+  usage: update_package.py [-h] [-m MACHINES] [--ssh-config SSH_CONFIG] [-i IMG] [-p PREFIX] [--repository-root REPOSITORY_ROOT] [-b] [-c] [-l {10,20,30,40,50}]
+                           FOLDER [FOLDER ...]
 
-… is as easy as entering a directory and run ~make~. Note that higher versioned images build on
-lower level ones. So to build ~unv-4.4-5~ you have to build ~unv-4.4-4~ first.
+  Build and update packages. Build packages for each FOLDER, copy them over to the given MACHINES and update them. Package buildings is done via Docker. Note that packages are only updated, i.e. if they are not installed the package will not be installed on the target machine. You can skip the check if the package is installed using "-c". The script is supposed to run anywhere in a git repository and FOLDER has to be relative to the root of the repo.
 
-*** Notes on Errata Levels
+  positional arguments:
+    FOLDER                The name of the folders to build (or -if "-b" is given- search) packages for. You have to pass in the relative name from the repository root Note
+                          that more than one package can stem from the same folder.
 
-Actually the errata level definition passed on to the Dockerfile only exists in order to be able to
-trigger rebuilds. Hence, it is not sctrictly necessary to have an actually existing errata level in
-there, but it makes tracking state much easier.
+  options:
+    -h, --help            show this help message and exit
+    -m MACHINES, --machines MACHINES
+                          The set of machines to update the packages on. This has to be a comma separated list. You can also set this argument via the "UP_MACHINES"
+                          environment variable.
+    --ssh-config SSH_CONFIG
+                          A ssh configuration file to pass on to ssh via the '-F' option. You can also set this argument via the "UP_SSH_CONFIG" environment variable.
+    -i IMG, --docker-image IMG
+                          Use IMG to build packages. You can also set this argument via the "UP_DOCKER_IMAGE" environment variable.
+    -p PREFIX, --prefix PREFIX
+                          Prefix all machines with the given string. Empty by default.
+    --repository-root REPOSITORY_ROOT
+                          The root of the repository. By default the root is searched by walking up the filetree until the `.git' directory is found.
+    -b, --skip-package-build
+                          Skip the build of the package before distributing it. Note that this results in a slightly different behaviour: the `FOLDER's are now simply
+                          searched for `.deb' files which are then assumed to be distributed. Make sure to clean up built packages!.
+    -c, --skip-install-check
+                          Skip the check if the package is installed on the machines.
+    -l {10,20,30,40,50}, --log-level {10,20,30,40,50}
+                          Set the levels of logging which should get printed to stdout. The lower the more messages you will see. Default: 20.
 
-To check latest errata levels, go to https://errata.software-univention.de/ and choose your UCS
-version.
-
-** Building Packages
-
-Prepare your image in such a way that packaging is as fast as possible, especially install all
-necessary packages upfront. You can find an example in [[./unv-bsb-5.0-2/][unv-bsb-5.0-2]]. There you can also find a an
-example build script [[./build.sh][build.sh]].
-
-Now, in order to build a package you have to map in the directory where your ~debian~ folder
-resides to ~/source~ in the Docker container. For example, if your package is in
-~/path/to/my-package~ with the Debian build instructions in ~/path/to/my-package/debian~ you would
-run:
-#+begin_src shell
-  docker run --rm -it \
-      --volume=/path/to/my-package:/source \
-      unv-bsb-5.0-2
-#+end_src
-Note that the paths passed to ~--volume~ have to be absolute ones. This will build the package, put
-the ~.deb~ file in ~/path/to/my-package~ and print a line on stdout starting with ~PKG_FILE=~. You
-can use that marker to build further scripts to upload the package and install it on a remote
-system. One example how this can be done is the [[./update_package.py][update_package.py]] script.
+  These are the configured predefined sets of machines:
+  single: bsbt1
+#+end_example
