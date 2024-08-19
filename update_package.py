@@ -146,57 +146,23 @@ def make_arg_parser():
     return parser
 
 
-class Configuration(typing.NamedTuple):
-    """The central place for application configuration.
-
-    Holds all the data needed to run the application in an easily processible structure.
-
-    """
-
+@dataclasses.dataclass(frozen=True)
+class BaseConfiguration:
     repository_root: pathlib.Path
-    # The branch_name is not used here, but was of use in other scripts. So I'll leave it here for
-    # convenience.
-    branch_name: str
-    machines: typing.List[str]
-    ssh_config: str
     docker_image: str
-    folders: typing.List[str]
-    skip_build: bool
-    skip_check: bool
 
     @classmethod
     def from_args(cls, args: argparse.Namespace):
-        """Instantiate from an `argparse.Namespace` object."""
         if args.repository_root is not None:
             repo_root = pathlib.Path(args.repository_root).resolve()
         else:
             repo_root = cls.search_repository_root(pathlib.Path(".").resolve())
-        git_rev_parse = subprocess.run(
-            ["git", "-C", repo_root, "rev-parse", "--abbrev-ref", "HEAD"],
-            check=True,
-            stdout=subprocess.PIPE,
-        )
-        branch_name = git_rev_parse.stdout.decode().strip()
-        if args.machines is None:
-            logger.error('No MACHINES provdided. See the "--machines" option.')
-            sys.exit(1)
-        machines = [
-            args.prefix + machine
-            for machine in MACHINE_SETS.get(args.machines, args.machines.split(","))
-        ]
+
         if args.docker_image is None:
             logger.error('No Docker image provided. See the "--docker-image" option.')
             sys.exit(1)
-        return cls(
-            repository_root=repo_root,
-            branch_name=branch_name,
-            machines=machines,
-            ssh_config=args.ssh_config,
-            docker_image=args.docker_image,
-            folders=args.folders,
-            skip_build=args.skip_package_build,
-            skip_check=args.skip_install_check,
-        )
+
+        return cls(repo_root, args.docker_image)
 
     @classmethod
     def search_repository_root(cls, current: pathlib.Path) -> pathlib.Path:
@@ -207,6 +173,47 @@ class Configuration(typing.NamedTuple):
         return cls.search_repository_root(current.parent)
 
 
+class Configuration(typing.NamedTuple):
+    """The central place for application configuration.
+
+    Holds all the data needed to run the application in an easily processible structure.
+
+    """
+
+    base_config: BaseConfiguration
+    # The branch_name is not used here, but was of use in other scripts. So I'll leave it here for
+    # convenience.
+    machines: typing.List[str]
+    ssh_config: str
+    folders: typing.List[str]
+    skip_build: bool
+    skip_check: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace):
+        """Instantiate from an `argparse.Namespace` object."""
+        base_config = BaseConfiguration.from_args(args)
+        if args.machines is None:
+            logger.error('No MACHINES provdided. See the "--machines" option.')
+            sys.exit(1)
+        machines = [
+            args.prefix + machine
+            for machine in MACHINE_SETS.get(args.machines, args.machines.split(","))
+        ]
+        return cls(
+            base_config,
+            machines=machines,
+            ssh_config=args.ssh_config,
+            folders=args.folders,
+            skip_build=args.skip_package_build,
+            skip_check=args.skip_install_check,
+        )
+
+    def run(self):
+        pkg_files = build_packages_and_get_paths(self)
+        update_packages(self, pkg_files)
+
+
 def main(argv=sys.argv[1:]):
     parser = make_arg_parser()
     args = parser.parse_args()
@@ -215,19 +222,18 @@ def main(argv=sys.argv[1:]):
 
     cfg = Configuration.from_args(args)
     logger.info(f"Configuration is:\n{cfg}")
-    pkg_files = build_packages_and_get_paths(cfg)
-    update_packages(cfg, pkg_files)
+    cfg.run()
 
 
 def build_packages_and_get_paths(cfg: Configuration) -> typing.List[pathlib.Path]:
     result = []
     for directory in cfg.folders:
-        dir_abs = cfg.repository_root / directory
+        dir_abs = cfg.base_config.repository_root / directory
         if cfg.skip_build:
             for pkg_file in dir_abs.glob("*.deb"):
                 result.append(pkg_file)
         else:
-            proc = build_packages(cfg, directory)
+            proc = build_packages(cfg.base_config, directory)
             for pkg_file in get_package_from_stdout(proc):
                 result.append(dir_abs / pkg_file)
     return result
@@ -261,7 +267,9 @@ done
 """
 
 
-def build_packages(cfg: Configuration, directory: str) -> subprocess.CompletedProcess:
+def build_packages(
+    cfg: BaseConfiguration, directory: str
+) -> subprocess.CompletedProcess:
     logger.info(f"Building packages in {directory}")
     cmd = [
         "docker",
