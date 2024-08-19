@@ -46,31 +46,20 @@ def make_arg_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "folders",
-        metavar="FOLDER",
-        nargs="+",
+        "-l",
+        "--log-level",
+        default=logging.INFO,
         help=(
-            'The name of the folders to build (or -if "-b" is given- search) packages for.'
-            " You have to pass in the relative name from the repository root"
-            " Note that more than one package can stem from the same folder."
+            "Set the levels of logging which should get printed to stdout. The lower the more"
+            " messages you will see. Default: %(default)s."
         ),
+        choices=_LOG_LEVEL_NAMES,
     )
     parser.add_argument(
-        "-m",
-        "--machines",
-        default=os.environ.get("UP_MACHINES"),
+        "--repository-root",
         help=(
-            "The set of machines to update the packages on."
-            " This has to be a comma separated list."
-            ' You can also set this argument via the "UP_MACHINES" environment variable.'
-        ),
-    )
-    parser.add_argument(
-        "--ssh-config",
-        default=os.environ.get("UP_SSH_CONFIG"),
-        help=(
-            "A ssh configuration file to pass on to ssh via the '-F' option."
-            ' You can also set this argument via the "UP_SSH_CONFIG" environment variable.'
+            "The root of the repository. By default the root is searched by walking up"
+            " the filetree until the `.git' directory is found."
         ),
     )
     parser.add_argument(
@@ -83,20 +72,46 @@ def make_arg_parser():
             ' You can also set this argument via the "UP_DOCKER_IMAGE" environment variable.'
         ),
     )
-    parser.add_argument(
+
+    subparsers = parser.add_subparsers()
+    build_and_update_p = subparsers.add_parser("build_and_update", aliases=["bu"])
+    build_and_update_p.set_defaults(action=BuildAndUpdate)
+
+    build_and_update_p.add_argument(
+        "folders",
+        metavar="FOLDER",
+        nargs="+",
+        help=(
+            'The name of the folders to build (or -if "-b" is given- search) packages for.'
+            " You have to pass in the relative name from the repository root"
+            " Note that more than one package can stem from the same folder."
+        ),
+    )
+    build_and_update_p.add_argument(
+        "-m",
+        "--machines",
+        default=os.environ.get("UP_MACHINES"),
+        help=(
+            "The set of machines to update the packages on."
+            " This has to be a comma separated list."
+            ' You can also set this argument via the "UP_MACHINES" environment variable.'
+        ),
+    )
+    build_and_update_p.add_argument(
+        "--ssh-config",
+        default=os.environ.get("UP_SSH_CONFIG"),
+        help=(
+            "A ssh configuration file to pass on to ssh via the '-F' option."
+            ' You can also set this argument via the "UP_SSH_CONFIG" environment variable.'
+        ),
+    )
+    build_and_update_p.add_argument(
         "-p",
         "--prefix",
         default="",
         help=("Prefix all machines with the given string." " Empty by default."),
     )
-    parser.add_argument(
-        "--repository-root",
-        help=(
-            "The root of the repository. By default the root is searched by walking up"
-            " the filetree until the `.git' directory is found."
-        ),
-    )
-    parser.add_argument(
+    build_and_update_p.add_argument(
         "-b",
         "--skip-package-build",
         help=(
@@ -106,21 +121,11 @@ def make_arg_parser():
         ),
         action="store_true",
     )
-    parser.add_argument(
+    build_and_update_p.add_argument(
         "-c",
         "--skip-install-check",
         help="Skip the check if the package is installed on the machines.",
         action="store_true",
-    )
-    parser.add_argument(
-        "-l",
-        "--log-level",
-        default=logging.INFO,
-        help=(
-            "Set the levels of logging which should get printed to stdout. The lower the more"
-            " messages you will see. Default: %(default)s."
-        ),
-        choices=_LOG_LEVEL_NAMES,
     )
     return parser
 
@@ -152,7 +157,7 @@ class BaseConfiguration:
         return cls.search_repository_root(current.parent)
 
 
-class Configuration(typing.NamedTuple):
+class BuildAndUpdate(typing.NamedTuple):
     """The central place for application configuration.
 
     Holds all the data needed to run the application in an easily processible structure.
@@ -199,12 +204,12 @@ def main(argv=sys.argv[1:]):
     logging.basicConfig(level=args.log_level)
     logger.debug("Passed command line arguments: %s", argv)
 
-    cfg = Configuration.from_args(args)
-    logger.info(f"Configuration is:\n{cfg}")
-    cfg.run()
+    action = args.action.from_args(args)
+    logger.info(f"Action is:\n%s", action)
+    action.run()
 
 
-def build_packages_and_get_paths(cfg: Configuration) -> typing.List[pathlib.Path]:
+def build_packages_and_get_paths(cfg: BuildAndUpdate) -> typing.List[pathlib.Path]:
     result = []
     for directory in cfg.folders:
         dir_abs = cfg.base_config.repository_root / directory
@@ -285,7 +290,7 @@ def get_package_from_stdout(proc: subprocess.CompletedProcess) -> typing.Iterabl
             yield pkg_file
 
 
-def update_packages(cfg: Configuration, packages: typing.List[pathlib.Path]) -> None:
+def update_packages(cfg: BuildAndUpdate, packages: typing.List[pathlib.Path]) -> None:
     ssh_ops = SSHOperations(cfg.ssh_config)
     for machine in cfg.machines:
         logger.info(f"Updating packages on {machine}")
