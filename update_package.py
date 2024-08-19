@@ -9,6 +9,16 @@ import sys
 import typing
 
 logger = logging.getLogger(__name__)
+_LOG_LEVEL_NAMES = [
+    logging.getLevelName(level)
+    for level in [
+        logging.CRITICAL,
+        logging.ERROR,
+        logging.WARNING,
+        logging.INFO,
+        logging.DEBUG,
+    ]
+]
 
 MACHINE_SETS = {
     "single": ["bsbt1"],  # This is how it is saved in my ssh_config
@@ -131,14 +141,7 @@ def make_arg_parser():
                 "messages you will see. Default: %(default)s.",
             ]
         ),
-        choices=[
-            logging.DEBUG,
-            logging.INFO,
-            logging.WARNING,
-            logging.ERROR,
-            logging.CRITICAL,
-        ],
-        type=int,
+        choices=_LOG_LEVEL_NAMES,
     )
     return parser
 
@@ -207,8 +210,8 @@ class Configuration(typing.NamedTuple):
 def main(argv=sys.argv[1:]):
     parser = make_arg_parser()
     args = parser.parse_args()
-    logger.addHandler(logging.StreamHandler(stream=sys.stdout))
-    logger.setLevel(args.log_level)
+    logging.basicConfig(level=args.log_level)
+    logger.debug("Passed command line arguments: %s", argv)
 
     cfg = Configuration.from_args(args)
     logger.info(f"Configuration is:\n{cfg}")
