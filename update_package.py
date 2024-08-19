@@ -27,17 +27,15 @@ MACHINE_SETS = {
 
 def make_arg_parser():
     parser = argparse.ArgumentParser(
-        description=" ".join(
-            [
-                "Build and update packages.",
-                "Build packages for each FOLDER, copy them over to the given MACHINES and update them.",
-                "Package buildings is done via Docker.",
-                "Note that packages are only updated, i.e. if they are not installed the package will not",
-                "be installed on the target machine.",
-                'You can skip the check if the package is installed using "-c".',
-                "The script is supposed to run anywhere in a git repository",
-                "and FOLDER has to be relative to the root of the repo.",
-            ]
+        description=(
+            "Build and update packages."
+            " Build packages for each FOLDER, copy them over to the given MACHINES and update them."
+            " Package buildings is done via Docker."
+            " Note that packages are only updated, i.e. if they are not installed the package will not"
+            " be installed on the target machine."
+            ' You can skip the check if the package is installed using "-c".'
+            " The script is supposed to run anywhere in a git repository"
+            " and FOLDER has to be relative to the root of the repo."
         ),
         epilog="\n".join(
             [
@@ -51,34 +49,28 @@ def make_arg_parser():
         "folders",
         metavar="FOLDER",
         nargs="+",
-        help=" ".join(
-            [
-                'The name of the folders to build (or -if "-b" is given- search) packages for.',
-                "You have to pass in the relative name from the repository root",
-                "Note that more than one package can stem from the same folder.",
-            ]
+        help=(
+            'The name of the folders to build (or -if "-b" is given- search) packages for.'
+            " You have to pass in the relative name from the repository root"
+            " Note that more than one package can stem from the same folder."
         ),
     )
     parser.add_argument(
         "-m",
         "--machines",
         default=os.environ.get("UP_MACHINES"),
-        help=" ".join(
-            [
-                "The set of machines to update the packages on.",
-                "This has to be a comma separated list.",
-                'You can also set this argument via the "UP_MACHINES" environment variable.',
-            ]
+        help=(
+            "The set of machines to update the packages on."
+            " This has to be a comma separated list."
+            ' You can also set this argument via the "UP_MACHINES" environment variable.'
         ),
     )
     parser.add_argument(
         "--ssh-config",
         default=os.environ.get("UP_SSH_CONFIG"),
-        help=" ".join(
-            [
-                "A ssh configuration file to pass on to ssh via the '-F' option.",
-                'You can also set this argument via the "UP_SSH_CONFIG" environment variable.',
-            ]
+        help=(
+            "A ssh configuration file to pass on to ssh via the '-F' option."
+            ' You can also set this argument via the "UP_SSH_CONFIG" environment variable.'
         ),
     )
     parser.add_argument(
@@ -86,42 +78,31 @@ def make_arg_parser():
         "--docker-image",
         metavar="IMG",
         default=os.environ.get("UP_DOCKER_IMAGE"),
-        help=" ".join(
-            [
-                "Use IMG to build packages.",
-                'You can also set this argument via the "UP_DOCKER_IMAGE" environment variable.',
-            ]
+        help=(
+            "Use IMG to build packages."
+            ' You can also set this argument via the "UP_DOCKER_IMAGE" environment variable.'
         ),
     )
     parser.add_argument(
         "-p",
         "--prefix",
         default="",
-        help=" ".join(
-            [
-                "Prefix all machines with the given string.",
-                "Empty by default.",
-            ]
-        ),
+        help=("Prefix all machines with the given string." " Empty by default."),
     )
     parser.add_argument(
         "--repository-root",
-        help=" ".join(
-            [
-                "The root of the repository. By default the root is searched by walking up",
-                "the filetree until the `.git' directory is found.",
-            ]
+        help=(
+            "The root of the repository. By default the root is searched by walking up"
+            " the filetree until the `.git' directory is found."
         ),
     )
     parser.add_argument(
         "-b",
         "--skip-package-build",
-        help=" ".join(
-            [
-                "Skip the build of the package before distributing it. Note that this results in a",
-                "slightly different behaviour: the `FOLDER's are now simply searched for `.deb' files",
-                "which are then assumed to be distributed. Make sure to clean up built packages!.",
-            ]
+        help=(
+            "Skip the build of the package before distributing it. Note that this results in a"
+            " slightly different behaviour: the `FOLDER's are now simply searched for `.deb' files"
+            " which are then assumed to be distributed. Make sure to clean up built packages!."
         ),
         action="store_true",
     )
@@ -135,11 +116,9 @@ def make_arg_parser():
         "-l",
         "--log-level",
         default=logging.INFO,
-        help=" ".join(
-            [
-                "Set the levels of logging which should get printed to stdout. The lower the more",
-                "messages you will see. Default: %(default)s.",
-            ]
+        help=(
+            "Set the levels of logging which should get printed to stdout. The lower the more"
+            " messages you will see. Default: %(default)s."
         ),
         choices=_LOG_LEVEL_NAMES,
     )
