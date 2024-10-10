@@ -73,7 +73,8 @@ def make_arg_parser():
         ),
     )
 
-    subparsers = parser.add_subparsers()
+    subparsers = parser.add_subparsers(help="sub-commands")
+
     build_and_update_p = subparsers.add_parser("build_and_update", aliases=["bu"])
     build_and_update_p.set_defaults(action=BuildAndUpdate)
 
@@ -127,6 +128,9 @@ def make_arg_parser():
         help="Skip the check if the package is installed on the machines.",
         action="store_true",
     )
+
+    drop_to_build_env_p = subparsers.add_parser("drop_to_build_env", aliases=["dbe"])
+    drop_to_build_env_p.set_defaults(action=DropToBuildEnv)
     return parser
 
 
@@ -198,11 +202,40 @@ class BuildAndUpdate(typing.NamedTuple):
         update_packages(self, pkg_files)
 
 
+@dataclasses.dataclass(frozen=True)
+class DropToBuildEnv:
+    base_config: BaseConfiguration
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace):
+        base_config = BaseConfiguration.from_args(args)
+        return cls(base_config)
+
+    def run(self):
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-it",
+            # Eventually we need sys_admin to do fancy things in the Docker container, like chrooting
+            #'--cap-add=sys_admin',
+            f"--volume={self.base_config.repository_root}:/source",
+            "--workdir=/source",
+            self.base_config.docker_image,
+            "/bin/bash",
+        ]
+        logger.debug(f"Command is:\n%s", " ".join(cmd))
+        subprocess.run(cmd)
+
+
 def main(argv=sys.argv[1:]):
     parser = make_arg_parser()
     args = parser.parse_args()
     logging.basicConfig(level=args.log_level)
     logger.debug("Passed command line arguments: %s", argv)
+
+    if not hasattr(args, "action"):
+        parser.error("No action provided!")
 
     action = args.action.from_args(args)
     logger.info(f"Action is:\n%s", action)
