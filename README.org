@@ -9,35 +9,22 @@ locally and distribute the files to the VMs.
 The script is easy to use and can be configured using environment variables via [[https://direnv.net/][direnv]]. You have to
 provide Docker image, a directory where packages should be build and a target machine:
 #+begin_example
-  usage: update_package.py [-h] [-m MACHINES] [--ssh-config SSH_CONFIG] [-i IMG] [-p PREFIX] [--repository-root REPOSITORY_ROOT] [-b] [-c] [-l {10,20,30,40,50}]
-                           FOLDER [FOLDER ...]
+  usage: update_package.py [-h] [-l {CRITICAL,ERROR,WARNING,INFO,DEBUG}] [--repository-root REPOSITORY_ROOT] [-i IMG] {build_and_update,bu,drop_to_build_env,dbe} ...
 
   Build and update packages. Build packages for each FOLDER, copy them over to the given MACHINES and update them. Package buildings is done via Docker. Note that packages are only updated, i.e. if they are not installed the package will not be installed on the target machine. You can skip the check if the package is installed using "-c". The script is supposed to run anywhere in a git repository and FOLDER has to be relative to the root of the repo.
 
   positional arguments:
-    FOLDER                The name of the folders to build (or -if "-b" is given- search) packages for. You have to pass in the relative name from the repository root Note
-                          that more than one package can stem from the same folder.
+    {build_and_update,bu,drop_to_build_env,dbe}
+                          sub-commands
 
   options:
     -h, --help            show this help message and exit
-    -m MACHINES, --machines MACHINES
-                          The set of machines to update the packages on. This has to be a comma separated list. You can also set this argument via the "UP_MACHINES"
-                          environment variable.
-    --ssh-config SSH_CONFIG
-                          A ssh configuration file to pass on to ssh via the '-F' option. You can also set this argument via the "UP_SSH_CONFIG" environment variable.
-    -i IMG, --docker-image IMG
-                          Use IMG to build packages. You can also set this argument via the "UP_DOCKER_IMAGE" environment variable.
-    -p PREFIX, --prefix PREFIX
-                          Prefix all machines with the given string. Empty by default.
+    -l {CRITICAL,ERROR,WARNING,INFO,DEBUG}, --log-level {CRITICAL,ERROR,WARNING,INFO,DEBUG}
+                          Set the levels of logging which should get printed to stdout. The lower the more messages you will see. Default: 20.
     --repository-root REPOSITORY_ROOT
                           The root of the repository. By default the root is searched by walking up the filetree until the `.git' directory is found.
-    -b, --skip-package-build
-                          Skip the build of the package before distributing it. Note that this results in a slightly different behaviour: the `FOLDER's are now simply
-                          searched for `.deb' files which are then assumed to be distributed. Make sure to clean up built packages!.
-    -c, --skip-install-check
-                          Skip the check if the package is installed on the machines.
-    -l {10,20,30,40,50}, --log-level {10,20,30,40,50}
-                          Set the levels of logging which should get printed to stdout. The lower the more messages you will see. Default: 20.
+    -i IMG, --docker-image IMG
+                          Use IMG to build packages. You can also set this argument via the "UP_DOCKER_IMAGE" environment variable.
 
   These are the configured predefined sets of machines:
   single: bsbt1
